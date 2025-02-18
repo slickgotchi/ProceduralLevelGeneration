@@ -68,9 +68,8 @@ public class TreeBaseGenerator : MonoBehaviour
         for (int i = 0; i < 2; i++)
         {
             if (!LevelGenerator.Instance.IsInRoomBounds(position.x, position.y - i)) continue;
-            Debug.Log("in bounds!");
+
             Vector3Int belowPosition = new Vector3Int(position.x, position.y - i, 0);
-            //treeBaseTilemap.SetTile(belowPosition, belowTiles[i]);
             treeBaseTilemap.SetTile(belowPosition, treeBase_RuleTile);
         }
     }
