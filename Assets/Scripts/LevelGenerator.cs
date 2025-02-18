@@ -6,6 +6,8 @@ using UnityEngine.Tilemaps;
 
 public class LevelGenerator : MonoBehaviour
 {
+    public static LevelGenerator Instance { get; private set; }
+
     public int roomWidth = 38;
     public int roomHeight = 24;
     public int maxBorderWallDepth = 5;
@@ -44,6 +46,19 @@ public class LevelGenerator : MonoBehaviour
     }
 
     private List<CorridorPair> m_corridorPairs = new List<CorridorPair>();
+
+    private void Awake()
+    {
+        if (Instance == null)
+        {
+            Instance = this;
+            DontDestroyOnLoad(gameObject);
+        }
+        else
+        {
+            Destroy(gameObject);
+        }
+    }
 
     public void Start()
     {
@@ -100,6 +115,9 @@ public class LevelGenerator : MonoBehaviour
         CreateTreetopBorderWalls();
 
         CreateHangLeavesTilemap();
+
+        // create treebases
+        TreeBaseGenerator.Instance.Generate();
 
         // place player in room 0
         player.transform.position = new Vector3(
@@ -604,5 +622,18 @@ public class LevelGenerator : MonoBehaviour
             int randIndex = UnityEngine.Random.Range(i, list.Count);
             (list[i], list[randIndex]) = (list[randIndex], list[i]);
         }
+    }
+
+    public bool IsInRoomBounds(int x, int y)
+    {
+        foreach (var room in m_rooms)
+        {
+            if (x >= room.xMin && x < room.xMax && y >= room.yMin && y < room.yMax)
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 }
