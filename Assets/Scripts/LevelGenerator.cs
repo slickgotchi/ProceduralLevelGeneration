@@ -77,6 +77,11 @@ public class LevelGenerator : MonoBehaviour
         }
     }
 
+    public List<RectInt> GetRooms()
+    {
+        return m_rooms;
+    }
+
     void ClearLevel()
     {
         var tilePrefabs = FindObjectsByType<TilePrefab>(FindObjectsInactive.Include, FindObjectsSortMode.None);
@@ -118,6 +123,7 @@ public class LevelGenerator : MonoBehaviour
 
         // create treebases
         TreeBaseGenerator.Instance.Generate();
+        GroundDetailGenerator.Instance.Generate();
 
         // place player in room 0
         player.transform.position = new Vector3(

@@ -12,13 +12,6 @@ public class TreeBaseGenerator : MonoBehaviour
 
     public RuleTile treeBase_RuleTile;
 
-    //[System.Serializable]
-    //public struct TilePair
-    //{
-    //    public Sprite searchTileSprite;
-    //    //public List<TileBase> belowTiles;
-    //}
-
     public List<Sprite> searchTileSprites = new List<Sprite>();
 
     private void Awake()
