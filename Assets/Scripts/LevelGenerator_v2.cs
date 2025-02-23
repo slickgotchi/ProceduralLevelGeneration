@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Tilemaps;
 
-
 public class LevelGenerator_v2 : MonoBehaviour
 {
     public static LevelGenerator_v2 Instance { get; private set; }
@@ -55,10 +54,22 @@ public class LevelGenerator_v2 : MonoBehaviour
         OverlappingRectangles, CellularAutomata, OverlappingEllipses, SingleRectangle, SingleEllipse
     }
 
-    public struct Room
+    public enum Direction { Null, Left, Right, Up, Down }
+
+    public class Room
     {
         public RectInt rectInt;
         public int[,] map;
+        public Room parent; // Reference to the parent Room (can be null if no parent)
+        public Direction directionToParent;
+
+        public Room()
+        {
+            rectInt = new RectInt();
+            map = null; // Initialize as null; you’ll set it later
+            parent = null; // No parent by default
+            directionToParent = Direction.Null;
+        }
     }
 
     private void Awake()
@@ -108,8 +119,14 @@ public class LevelGenerator_v2 : MonoBehaviour
             }
         }
 
+        int roomEdgeBuffer = 2;
+
         // place rooms
-        GenerateRooms();
+        GenerateRooms(roomEdgeBuffer);
+
+        BuildCorridors(roomEdgeBuffer);
+
+        PrepForWallTilemapping();
 
         // render the map
         RenderMap();
@@ -186,6 +203,7 @@ public class LevelGenerator_v2 : MonoBehaviour
 
             // Resize the room to fit the bounds of the overlapped rectangles, maintaining edge buffer
             tempRoom = ResizeRoomToFloorBounds(tempRoom, roomEdgeBuffer);
+            tempRoom = FillVoidsWithWalls(tempRoom);
 
             return tempRoom;
         }
@@ -249,6 +267,7 @@ public class LevelGenerator_v2 : MonoBehaviour
             tempRoom = TrimIsolatedEdgeFloorTiles(tempRoom, roomEdgeBuffer);
             tempRoom = KeepLargestContinuousFloorSection(tempRoom);
             tempRoom = ResizeRoomToFloorBounds(tempRoom, roomEdgeBuffer);
+            tempRoom = FillVoidsWithWalls(tempRoom);
 
             return tempRoom;
         }
@@ -313,6 +332,7 @@ public class LevelGenerator_v2 : MonoBehaviour
 
             tempRoom = TrimIsolatedEdgeFloorTiles(tempRoom, roomEdgeBuffer);
             tempRoom = ResizeRoomToFloorBounds(tempRoom, roomEdgeBuffer);
+            tempRoom = FillVoidsWithWalls(tempRoom);
 
             return tempRoom;
         }
@@ -377,10 +397,10 @@ public class LevelGenerator_v2 : MonoBehaviour
                 }
             }
 
-
             tempRoom = TrimIsolatedEdgeFloorTiles(tempRoom, roomEdgeBuffer);
             tempRoom = KeepLargestContinuousFloorSection(tempRoom);
             tempRoom = ResizeRoomToFloorBounds(tempRoom, roomEdgeBuffer);
+            tempRoom = FillVoidsWithWalls(tempRoom);
 
             return tempRoom;
         }
@@ -388,11 +408,8 @@ public class LevelGenerator_v2 : MonoBehaviour
         return new int[1, 1];
     }
 
-    
-
-    bool GenerateRooms()
+    bool GenerateRooms(int roomEdgeBuffer)
     {
-        int roomEdgeBuffer = 2;
         int numFailAttempts = 5;
 
         for (int i = 0; i < targetNumberRooms; i++)
@@ -409,7 +426,7 @@ public class LevelGenerator_v2 : MonoBehaviour
                     map = tempRoom
                 };
 
-                TryAddRoom(firstRoom);
+                TryAddRoom(firstRoom, null);
                 continue;
             }
 
@@ -461,7 +478,7 @@ public class LevelGenerator_v2 : MonoBehaviour
                 newRoom.rectInt.x = positions[j].x;
                 newRoom.rectInt.y = positions[j].y;
 
-                if (TryAddRoom(newRoom))
+                if (TryAddRoom(newRoom, existingRoom))
                 {
                     isAdded = true;
                     break;
@@ -481,7 +498,234 @@ public class LevelGenerator_v2 : MonoBehaviour
         return true;
     }
 
-    bool TryAddRoom(Room newRoom)
+    void BuildCorridors(int roomEdgeBuffer)
+    {
+        for (int i = 0; i < m_rooms.Count; i++)
+        {
+            var room = m_rooms[i];
+            var parentRoom = room.parent;
+            if (parentRoom == null) continue;
+
+            if (room.directionToParent == Direction.Left)
+            {
+                int lowerY = Unity.Mathematics.math.max(room.rectInt.yMin, parentRoom.rectInt.yMin) + roomEdgeBuffer;
+                int upperY = Unity.Mathematics.math.min(room.rectInt.yMax-1, parentRoom.rectInt.yMax-1) - roomEdgeBuffer;
+                int y = Random.Range(lowerY, upperY-1);
+
+                // fill to right
+                bool isUpperDone = false;
+                bool isLowerDone = false;
+                for (int x = room.rectInt.xMin; x < room.rectInt.xMax; x++)
+                {
+                    if (m_map[x, y] == 1) isLowerDone = true;
+                    if(!isLowerDone) m_map[x, y] = 1;
+
+                    if (m_map[x, y + 1] == 1) isUpperDone = true;
+                    if (!isUpperDone) m_map[x, y + 1] = 1;
+                }
+
+                // fill to left
+                isUpperDone = false;
+                isLowerDone = false;
+                for (int x = parentRoom.rectInt.xMax-1; x > parentRoom.rectInt.xMin; x--)
+                {
+                    if (m_map[x, y] == 1) isLowerDone = true;
+                    if (!isLowerDone) m_map[x, y] = 1;
+
+                    if (m_map[x, y + 1] == 1) isUpperDone = true;
+                    if (!isUpperDone) m_map[x, y + 1] = 1;
+                }
+            }
+
+            if (room.directionToParent == Direction.Right)
+            {
+                int lowerY = Unity.Mathematics.math.max(room.rectInt.yMin, parentRoom.rectInt.yMin) + roomEdgeBuffer;
+                int upperY = Unity.Mathematics.math.min(room.rectInt.yMax-1, parentRoom.rectInt.yMax-1) - roomEdgeBuffer;
+                int y = Random.Range(lowerY, upperY -1);
+
+                // fill to left
+                bool isUpperDone = false;
+                bool isLowerDone = false;
+                for (int x = room.rectInt.xMax - 1; x > room.rectInt.xMin; x--)
+                {
+                    if (m_map[x, y] == 1) isLowerDone = true;
+                    if (!isLowerDone) m_map[x, y] = 1;
+
+                    if (m_map[x, y + 1] == 1) isUpperDone = true;
+                    if (!isUpperDone) m_map[x, y + 1] = 1;
+                }
+
+                // fill to right
+                isUpperDone = false;
+                isLowerDone = false;
+                for (int x = parentRoom.rectInt.xMin; x < parentRoom.rectInt.xMax; x++)
+                {
+                    if (m_map[x, y] == 1) isLowerDone = true;
+                    if (!isLowerDone) m_map[x, y] = 1;
+
+                    if (m_map[x, y + 1] == 1) isUpperDone = true;
+                    if (!isUpperDone) m_map[x, y + 1] = 1;
+                }
+            }
+
+            if (room.directionToParent == Direction.Down)
+            {
+                int lowerX = Unity.Mathematics.math.max(room.rectInt.xMin, parentRoom.rectInt.xMin) + roomEdgeBuffer;
+                int upperX = Unity.Mathematics.math.min(room.rectInt.xMax-1, parentRoom.rectInt.xMax-1) - roomEdgeBuffer;
+                int x = Random.Range(lowerX, upperX -1);
+
+                // fill room up
+                bool isUpperDone = false;
+                bool isLowerDone = false;
+                for (int y = room.rectInt.yMin; y < room.rectInt.yMax; y++)
+                {
+                    if (m_map[x, y] == 1) isLowerDone = true;
+                    if (!isLowerDone) m_map[x, y] = 1;
+
+                    if (m_map[x + 1, y] == 1) isUpperDone = true;
+                    if (!isUpperDone) m_map[x + 1, y] = 1;
+                }
+
+                // fill parent down
+                isUpperDone = false;
+                isLowerDone = false;
+                for (int y = parentRoom.rectInt.yMax-1; y > parentRoom.rectInt.yMin; y--)
+                {
+                    if (m_map[x, y] == 1) isLowerDone = true;
+                    if (!isLowerDone) m_map[x, y] = 1;
+
+                    if (m_map[x + 1, y] == 1) isUpperDone = true;
+                    if (!isUpperDone) m_map[x + 1, y] = 1;
+                }
+            }
+
+            if (room.directionToParent == Direction.Up)
+            {
+                int lowerX = Unity.Mathematics.math.max(room.rectInt.xMin, parentRoom.rectInt.xMin) + roomEdgeBuffer;
+                int upperX = Unity.Mathematics.math.min(room.rectInt.xMax-1, parentRoom.rectInt.xMax-1) - roomEdgeBuffer;
+                int x = Random.Range(lowerX, upperX -1);
+
+                // fill room down
+                bool isUpperDone = false;
+                bool isLowerDone = false;
+                for (int y = room.rectInt.yMax-1; y > room.rectInt.yMin; y--)
+                {
+                    if (m_map[x, y] == 1) isLowerDone = true;
+                    if (!isLowerDone) m_map[x, y] = 1;
+
+                    if (m_map[x + 1, y] == 1) isUpperDone = true;
+                    if (!isUpperDone) m_map[x + 1, y] = 1;
+                }
+
+                // fill parent up
+                isUpperDone = false;
+                isLowerDone = false;
+                for (int y = parentRoom.rectInt.yMin; y < parentRoom.rectInt.yMax; y++)
+                {
+                    if (m_map[x, y] == 1) isLowerDone = true;
+                    if (!isLowerDone) m_map[x, y] = 1;
+
+                    if (m_map[x + 1, y] == 1) isUpperDone = true;
+                    if (!isUpperDone) m_map[x + 1, y] = 1;
+                }
+            }
+        }
+    }
+
+    void PrepForWallTilemapping()
+    {
+        int floorTile = (int)GridType.Floor;
+        int wallTile = (int)GridType.Wall;
+
+        for (int x = 0; x < m_map.GetLength(0); x++)
+        {
+            for (int y = 0; y < m_map.GetLength(1); y++)
+            {
+                // check fill to right
+                if (m_map[x,y] == wallTile && m_map[x-1,y] == floorTile)
+                {
+                    bool isNeedFilling = false;
+                    for (int i = 0; i < 4; i++)
+                    {
+                        if (m_map[x + i, y] == floorTile) isNeedFilling = true;
+                    }
+
+                    if (isNeedFilling)
+                    {
+                        for (int i = 0; i < 4; i++)
+                        {
+                            if (m_map[x + i, y] == floorTile) break;
+
+                            m_map[x + i, y] = floorTile;
+                        }
+                    }
+                }
+
+                // check fill to left
+                if (m_map[x, y] == wallTile && m_map[x + 1, y] == floorTile)
+                {
+                    bool isNeedFilling = false;
+                    for (int i = 0; i < 4; i++)
+                    {
+                        if (m_map[x + i, y] == floorTile) isNeedFilling = true;
+                    }
+
+                    if (isNeedFilling)
+                    {
+                        for (int i = 0; i < 4; i++)
+                        {
+                            if (m_map[x + i, y] == floorTile) break;
+
+                            m_map[x + i, y] = floorTile;
+                        }
+                    }
+                }
+
+                // check fill up
+                if (m_map[x, y] == wallTile && m_map[x, y-1] == floorTile)
+                {
+                    bool isNeedFilling = false;
+                    for (int i = 0; i < 4; i++)
+                    {
+                        if (m_map[x, y + i] == floorTile) isNeedFilling = true;
+                    }
+
+                    if (isNeedFilling)
+                    {
+                        for (int i = 0; i < 4; i++)
+                        {
+                            if (m_map[x, y + i] == floorTile) break;
+
+                            m_map[x, y + i] = floorTile;
+                        }
+                    }
+                }
+
+                // check fill down
+                if (m_map[x, y] == wallTile && m_map[x, y+1] == floorTile)
+                {
+                    bool isNeedFilling = false;
+                    for (int i = 0; i < 4; i++)
+                    {
+                        if (m_map[x, y - i] == floorTile) isNeedFilling = true;
+                    }
+
+                    if (isNeedFilling)
+                    {
+                        Debug.Log("need to do some down filling");
+                        for (int i = 0; i < 4; i++)
+                        {
+                            if (m_map[x, y - i] == floorTile) break;
+                            Debug.Log("filled");
+                            m_map[x, y - i] = floorTile;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    bool TryAddRoom(Room newRoom, Room parentRoom)
     {
         // 1. check room still in bounds of level
         if (newRoom.rectInt.xMin < 0 || newRoom.rectInt.xMax >= m_map.GetLength(0) || newRoom.rectInt.yMin < 0 || newRoom.rectInt.yMax >= m_map.GetLength(1))
@@ -501,11 +745,22 @@ public class LevelGenerator_v2 : MonoBehaviour
             }
         }
 
+        // do parent stuff
+        newRoom.parent = parentRoom;
+        if (parentRoom != null)
+        {
+            if (newRoom.rectInt.xMin == parentRoom.rectInt.xMax) newRoom.directionToParent = Direction.Left;
+            if (newRoom.rectInt.xMax == parentRoom.rectInt.xMin) newRoom.directionToParent = Direction.Right;
+            if (newRoom.rectInt.yMin == parentRoom.rectInt.yMax) newRoom.directionToParent = Direction.Down;
+            if (newRoom.rectInt.yMax == parentRoom.rectInt.yMin) newRoom.directionToParent = Direction.Up;
+        }
+
         // ok room is ok, we can add it
         m_rooms.Add(newRoom);
 
-        //Debug.Log("add room to map with width: " + newRoom.rectInt.width + ", height: " + newRoom.rectInt.height + " at x: " + newRoom.rectInt.x + ", y " + newRoom.rectInt.y);
+        Debug.Log("Placed room at x: " + newRoom.rectInt.x + ", y: " + newRoom.rectInt.y);
 
+        // map the room to m_map (for rendering)
         for (int x = 0; x < newRoom.rectInt.width; x++)
         {
             for (int y = 0; y < newRoom.rectInt.height; y++)
@@ -764,5 +1019,21 @@ public class LevelGenerator_v2 : MonoBehaviour
         }
 
         return resizedRoom;
+    }
+
+    private int[,] FillVoidsWithWalls(int[,] room)
+    {
+        for (int x = 0; x < room.GetLength(0); x++)
+        {
+            for (int y = 0; y < room.GetLength(1); y++)
+            {
+                if (room[x,y] == 0)
+                {
+                    room[x, y] = 2;
+                }
+            }
+        }
+
+        return room;
     }
 }
