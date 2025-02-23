@@ -47,7 +47,7 @@ public class GroundDetailGenerator : MonoBehaviour
                     }
 
                     noiseValue = (noise.snoise(new float2(x+10, y+10)) + 1) * 0.5f;
-                    if (noiseValue > 0.86f)
+                    if (noiseValue > 0.87f)
                     {
                         SetTileRectangle(x, y, 3, 2, false);
                     }
