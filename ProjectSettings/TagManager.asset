@@ -47,6 +47,9 @@ TagManager:
   - name: Player
     uniqueID: 3978180239
     locked: 0
+  - name: TreeBases
+    uniqueID: 1600843909
+    locked: 0
   - name: Leaves
     uniqueID: 1433461653
     locked: 0

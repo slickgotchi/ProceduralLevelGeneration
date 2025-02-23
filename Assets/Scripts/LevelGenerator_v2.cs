@@ -17,17 +17,21 @@ public class LevelGenerator_v2 : MonoBehaviour
     public int maxLevelHeight = 17 * 6;
     public int targetNumberRooms = 7;
 
-    // room dimensions
-    //[Header("Room Dimensions")]
-    //public int maxRoomWidth = 54;
-    //public int maxRoomHeight = 34;
-    //public int minCorridorLength = 3;
-    //public int maxCorridorLength = 10;
-
     [Header("Tilemaps to Populate")]
-    public Tilemap baseTilemap;
+    public Tilemap baseWorking_Tilemap;
+    public Tilemap ground_Tilemap;
+    public Tilemap topLeaf_Tilemap;
+    public Tilemap hangLeaf_Tilemap;
+    public Tilemap treeTrunk_Tilemap;
+    public Tilemap border_Tilemap;
+
+    [Header("Tiles")]
     public TileBase floorTile;
     public TileBase doorTile;
+    public TileBase border_Tile;
+    public RuleTile treeTrunk_RuleTile;
+    public RuleTile topLeaf_RuleTile;
+    public RuleTile hangLeaf_RuleTile;
 
     [Header("Level Gen Seed")]
     public int masterSeed = 123;
@@ -120,13 +124,15 @@ public class LevelGenerator_v2 : MonoBehaviour
         }
 
         int roomEdgeBuffer = 2;
+        int levelEdgeBuffer = 4;
 
         // place rooms
-        GenerateRooms(roomEdgeBuffer);
+        GenerateRooms(roomEdgeBuffer, levelEdgeBuffer);
 
         BuildCorridors(roomEdgeBuffer);
 
-        PrepForWallTilemapping();
+        PrepForWallTilemapping(levelEdgeBuffer);
+        PrepForWallTilemapping(levelEdgeBuffer);
 
         // render the map
         RenderMap();
@@ -269,6 +275,9 @@ public class LevelGenerator_v2 : MonoBehaviour
             tempRoom = ResizeRoomToFloorBounds(tempRoom, roomEdgeBuffer);
             tempRoom = FillVoidsWithWalls(tempRoom);
 
+            // Add new function to fill isolated wall islands with floor tiles
+            //tempRoom = FillIsolatedWallIslands(tempRoom, roomEdgeBuffer);
+
             return tempRoom;
         }
 
@@ -408,7 +417,7 @@ public class LevelGenerator_v2 : MonoBehaviour
         return new int[1, 1];
     }
 
-    bool GenerateRooms(int roomEdgeBuffer)
+    bool GenerateRooms(int roomEdgeBuffer, int levelEdgeBuffer)
     {
         int numFailAttempts = 5;
 
@@ -478,7 +487,7 @@ public class LevelGenerator_v2 : MonoBehaviour
                 newRoom.rectInt.x = positions[j].x;
                 newRoom.rectInt.y = positions[j].y;
 
-                if (TryAddRoom(newRoom, existingRoom))
+                if (TryAddRoom(newRoom, existingRoom, levelEdgeBuffer))
                 {
                     isAdded = true;
                     break;
@@ -632,69 +641,74 @@ public class LevelGenerator_v2 : MonoBehaviour
         }
     }
 
-    void PrepForWallTilemapping()
+    void PrepForWallTilemapping(int levelEdgeBuffer)
     {
         int floorTile = (int)GridType.Floor;
         int wallTile = (int)GridType.Wall;
 
-        for (int x = 0; x < m_map.GetLength(0); x++)
+        int mapLengthX = m_map.GetLength(0);
+        int mapLengthY = m_map.GetLength(1);
+
+        // 1. first we fill in all the slightly missing tiles
+        for (int x = 0; x < mapLengthX; x++)
         {
-            for (int y = 0; y < m_map.GetLength(1); y++)
+            for (int y = 0; y < mapLengthY; y++)
             {
                 // check fill to right
-                if (m_map[x,y] == wallTile && m_map[x-1,y] == floorTile)
+                if (x - 1 >= 0 && m_map[x,y] == wallTile && m_map[x-1,y] == floorTile)
                 {
                     bool isNeedFilling = false;
                     for (int i = 0; i < 4; i++)
                     {
-                        if (m_map[x + i, y] == floorTile) isNeedFilling = true;
+                        if (x + i < mapLengthX && m_map[x + i, y] == floorTile) isNeedFilling = true;
                     }
 
                     if (isNeedFilling)
                     {
                         for (int i = 0; i < 4; i++)
                         {
-                            if (m_map[x + i, y] == floorTile) break;
+                            if (x + i >= mapLengthX || m_map[x + i, y] == floorTile) break;
 
                             m_map[x + i, y] = floorTile;
+                            //m_map[x + i, y - 1] = floorTile;
                         }
                     }
                 }
 
                 // check fill to left
-                if (m_map[x, y] == wallTile && m_map[x + 1, y] == floorTile)
+                if (x + 1 < mapLengthX && m_map[x, y] == wallTile && m_map[x + 1, y] == floorTile)
                 {
                     bool isNeedFilling = false;
                     for (int i = 0; i < 4; i++)
                     {
-                        if (m_map[x + i, y] == floorTile) isNeedFilling = true;
+                        if (x - i >= 0 && m_map[x - i, y] == floorTile) isNeedFilling = true;
                     }
 
                     if (isNeedFilling)
                     {
                         for (int i = 0; i < 4; i++)
                         {
-                            if (m_map[x + i, y] == floorTile) break;
+                            if (x - i < 0 || m_map[x - i, y] == floorTile) break;
 
-                            m_map[x + i, y] = floorTile;
+                            m_map[x - i, y] = floorTile;
                         }
                     }
                 }
 
                 // check fill up
-                if (m_map[x, y] == wallTile && m_map[x, y-1] == floorTile)
+                if (y-1 >= 0 && m_map[x, y] == wallTile && m_map[x, y-1] == floorTile)
                 {
                     bool isNeedFilling = false;
                     for (int i = 0; i < 4; i++)
                     {
-                        if (m_map[x, y + i] == floorTile) isNeedFilling = true;
+                        if (y + i < mapLengthY && m_map[x, y + i] == floorTile) isNeedFilling = true;
                     }
 
                     if (isNeedFilling)
                     {
                         for (int i = 0; i < 4; i++)
                         {
-                            if (m_map[x, y + i] == floorTile) break;
+                            if (y + i >= mapLengthY || m_map[x, y + i] == floorTile) break;
 
                             m_map[x, y + i] = floorTile;
                         }
@@ -702,33 +716,72 @@ public class LevelGenerator_v2 : MonoBehaviour
                 }
 
                 // check fill down
-                if (m_map[x, y] == wallTile && m_map[x, y+1] == floorTile)
+                if (y+1 < mapLengthY && m_map[x, y] == wallTile && m_map[x, y+1] == floorTile)
                 {
                     bool isNeedFilling = false;
                     for (int i = 0; i < 4; i++)
                     {
-                        if (m_map[x, y - i] == floorTile) isNeedFilling = true;
+                        if (y - i >= 0 && m_map[x, y - i] == floorTile) isNeedFilling = true;
                     }
 
                     if (isNeedFilling)
                     {
-                        Debug.Log("need to do some down filling");
                         for (int i = 0; i < 4; i++)
                         {
-                            if (m_map[x, y - i] == floorTile) break;
-                            Debug.Log("filled");
+                            if (y - i < 0 || m_map[x, y - i] == floorTile) break;
+
                             m_map[x, y - i] = floorTile;
                         }
                     }
                 }
             }
         }
+
+        
+        // 2. second we want to give any top row wall tiles (up against voids) have an extra 3 tiles for tilemapping tree tops
+        for (int x = levelEdgeBuffer; x < mapLengthX - levelEdgeBuffer; x++)
+        {
+            for (int y = mapLengthY - levelEdgeBuffer; y >= levelEdgeBuffer; y--)
+            {
+                if (m_map[x,y] == (int)GridType.Void && m_map[x,y-1] == (int)GridType.Wall)
+                {
+                    for (int i = 0; i < 3; i++)
+                    {
+                        if (m_map[x,y+i] == (int)GridType.Void)
+                        {
+                            m_map[x, y + i] = (int)GridType.Wall;
+                        }
+                    }
+                }
+            }
+        }
+
+        // 3. check for isolated on both sides floor tiles
+        for (int x = levelEdgeBuffer; x < mapLengthX - levelEdgeBuffer; x++)
+        {
+            for (int y = mapLengthY - levelEdgeBuffer; y >= levelEdgeBuffer; y--)
+            {
+                if (m_map[x, y] == (int)GridType.Floor && m_map[x, y - 1] == (int)GridType.Wall && m_map[x, y +1] == (int)GridType.Wall)
+                {
+                    m_map[x, y - 1] = (int)GridType.Floor;
+                    m_map[x, y + 1] = (int)GridType.Floor;
+                }
+
+                if (m_map[x, y] == (int)GridType.Floor && m_map[x-1, y] == (int)GridType.Wall && m_map[x+1, y] == (int)GridType.Wall)
+                {
+                    m_map[x-1, y] = (int)GridType.Floor;
+                    m_map[x+1, y] = (int)GridType.Floor;
+                }
+            }
+        }
+
     }
 
-    bool TryAddRoom(Room newRoom, Room parentRoom)
+    bool TryAddRoom(Room newRoom, Room parentRoom, int levelEdgeBuffer = 2)
     {
-        // 1. check room still in bounds of level
-        if (newRoom.rectInt.xMin < 0 || newRoom.rectInt.xMax >= m_map.GetLength(0) || newRoom.rectInt.yMin < 0 || newRoom.rectInt.yMax >= m_map.GetLength(1))
+        // 1. check room still in bounds of level (and add on a buffer
+        if (newRoom.rectInt.xMin < levelEdgeBuffer || newRoom.rectInt.xMax >= m_map.GetLength(0) - levelEdgeBuffer ||
+            newRoom.rectInt.yMin < levelEdgeBuffer || newRoom.rectInt.yMax >= m_map.GetLength(1) - levelEdgeBuffer)
         {
             return false;
         }
@@ -801,31 +854,102 @@ public class LevelGenerator_v2 : MonoBehaviour
         return count;
     }
 
-    void RenderMap()
+    void RenderMap(int levelEdgeBuffer = 2)
     {
-        for (int x = 0; x < m_map.GetLength(0); x++)
+        int mapLengthX = m_map.GetLength(0);
+        int mapLengthY = m_map.GetLength(1);
+
+        for (int x = levelEdgeBuffer; x < mapLengthX - levelEdgeBuffer; x++)
         {
-            for (int y = 0; y < m_map.GetLength(1); y++)
+            for (int y = levelEdgeBuffer; y < mapLengthY - levelEdgeBuffer; y++)
             {
-                if (m_map[x, y] == 1 ||
-                    x == 0 || y == 0 || x == m_map.GetLength(0)-1 || y == m_map.GetLength(1)-1)
+                if (m_map[x, y] == 0)
                 {
-                    baseTilemap.SetTile(new Vector3Int(x, y, 0), floorTile);
+                    // draw leafTop tile if the tile below is a wall
+                    if (m_map[x, y - 1] == 2)
+                    {
+                        topLeaf_Tilemap.SetTile(new Vector3Int(x, y, 0), topLeaf_RuleTile);
+
+                        // draw hangleaf below
+                        hangLeaf_Tilemap.SetTile(new Vector3Int(x, y - 1, 0), hangLeaf_RuleTile);
+                    }
+                }
+
+                if (m_map[x, y] == 1 ||
+                    x == 0 || y == 0 || x == mapLengthX-1 || y == mapLengthY-1)
+                {
+                    baseWorking_Tilemap.SetTile(new Vector3Int(x, y, 0), floorTile);
+
+                    // draw leafTop tile if the tile below is a wall
+                    if (m_map[x,y-1] == 2)
+                    {
+                        topLeaf_Tilemap.SetTile(new Vector3Int(x, y, 0), topLeaf_RuleTile);
+
+                        // draw hangleaf below
+                        hangLeaf_Tilemap.SetTile(new Vector3Int(x, y - 1, 0), hangLeaf_RuleTile);
+                    }
                 }
 
                 if (m_map[x, y] == 2)
                 {
-                    baseTilemap.SetTile(new Vector3Int(x, y, 0), doorTile);
+                    baseWorking_Tilemap.SetTile(new Vector3Int(x, y, 0), doorTile);
+
+                    treeTrunk_Tilemap.SetTile(new Vector3Int(x, y, 0), treeTrunk_RuleTile);
+
+                    // draw tree top tile if its a wall tile AND there's not a floor tile 2 tiles below it
+                    if (m_map[x, y-2] != 1)
+                    {
+                        topLeaf_Tilemap.SetTile(new Vector3Int(x, y, 0), topLeaf_RuleTile);
+
+                        // draw hangleaf below
+                        hangLeaf_Tilemap.SetTile(new Vector3Int(x, y - 1, 0), hangLeaf_RuleTile);
+                    }
                 }
             }
         }
+
+        // finally draw the border
+        for (int x = levelEdgeBuffer; x < mapLengthX - levelEdgeBuffer; x++)
+        {
+            for (int y = levelEdgeBuffer; y < mapLengthY - levelEdgeBuffer; y++)
+            {
+                if (m_map[x,y] == (int)GridType.Wall)
+                {
+                    int countVoids = CountGridNeighbours(m_map, GridType.Void, x, y);
+                    if (countVoids > 0)
+                    {
+                        border_Tilemap.SetTile(new Vector3Int(x, y, 0), border_Tile);
+
+                        if (m_map[x,y+1] == (int)GridType.Void)
+                        {
+                            border_Tilemap.SetTile(new Vector3Int(x, y + 1, 0), border_Tile);
+                        }
+
+                        if (m_map[x, y - 1] == (int)GridType.Void)
+                        {
+                            border_Tilemap.SetTile(new Vector3Int(x, y - 1, 0), border_Tile);
+                        }
+                    }
+                }
+            }
+        }
+
+
     }
 
     void ClearExistingLevel()
     {
-        baseTilemap.ClearAllTiles();
+        baseWorking_Tilemap.ClearAllTiles();
+        ground_Tilemap.ClearAllTiles();
+        treeTrunk_Tilemap.ClearAllTiles();
+        topLeaf_Tilemap.ClearAllTiles();
+        hangLeaf_Tilemap.ClearAllTiles();
+        border_Tilemap.ClearAllTiles();
+
         m_rooms.Clear();
     }
+
+    #region Room Utilities
 
     // Helper function to trim isolated floor tiles along the cardinal edges of the ellipse
     private int[,] TrimIsolatedEdgeFloorTiles(int[,] room, int edgeBuffer)
@@ -1021,6 +1145,96 @@ public class LevelGenerator_v2 : MonoBehaviour
         return resizedRoom;
     }
 
+    // Updated helper function to fill isolated wall islands with floor tiles
+    private int[,] FillIsolatedWallIslands(int[,] room, int edgeBuffer)
+    {
+        int width = room.GetLength(0);
+        int height = room.GetLength(1);
+        int[,] newRoom = (int[,])room.Clone(); // Create a copy to modify
+        List<List<Vector2Int>> wallRegions = new List<List<Vector2Int>>();
+        HashSet<Vector2Int> visited = new HashSet<Vector2Int>();
+
+        // Find all connected regions of wall tiles using flood-fill
+        for (int x = 0; x < width; x++)
+        {
+            for (int y = 0; y < height; y++)
+            {
+                if (room[x, y] == (int)GridType.Wall && !visited.Contains(new Vector2Int(x, y)))
+                {
+                    List<Vector2Int> region = new List<Vector2Int>();
+                    Queue<Vector2Int> queue = new Queue<Vector2Int>();
+                    queue.Enqueue(new Vector2Int(x, y));
+                    visited.Add(new Vector2Int(x, y));
+
+                    bool touchesBorder = false;
+                    int regionSize = 0;
+
+                    while (queue.Count > 0)
+                    {
+                        Vector2Int current = queue.Dequeue();
+                        int cx = current.x;
+                        int cy = current.y;
+                        region.Add(current);
+                        regionSize++;
+
+                        // Check if this tile touches the border (within edgeBuffer of any edge)
+                        if (cx < edgeBuffer || cx >= width - edgeBuffer ||
+                            cy < edgeBuffer || cy >= height - edgeBuffer)
+                        {
+                            touchesBorder = true;
+                            break;
+                        }
+
+                        // Use 8-directional connectivity to better capture wall regions
+                        int[] dx = { -1, -1, -1, 0, 0, 1, 1, 1 };
+                        int[] dy = { -1, 0, 1, -1, 1, -1, 0, 1 };
+                        for (int i = 0; i < 8; i++)
+                        {
+                            int nx = cx + dx[i];
+                            int ny = cy + dy[i];
+                            Vector2Int neighbor = new Vector2Int(nx, ny);
+                            if (nx >= 0 && nx < width && ny >= 0 && ny < height &&
+                                room[nx, ny] == (int)GridType.Wall && !visited.Contains(neighbor))
+                            {
+                                // Check if the neighbor touches the border
+                                if (nx < edgeBuffer || nx >= width - edgeBuffer ||
+                                    ny < edgeBuffer || ny >= height - edgeBuffer)
+                                {
+                                    touchesBorder = true;
+                                    break;
+                                }
+                                visited.Add(neighbor);
+                                queue.Enqueue(neighbor);
+                            }
+                        }
+                        if (touchesBorder) break;
+                    }
+
+                    // Log the region for debugging
+                    Debug.Log($"Found wall region at {x}, {y} with size {regionSize} tiles, touchesBorder = {touchesBorder}");
+
+                    // Only add the region to the list if it doesn’t touch the border
+                    if (!touchesBorder)
+                    {
+                        wallRegions.Add(region);
+                    }
+                }
+            }
+        }
+
+        // Fill all internal wall regions (those not touching the border) with floor tiles
+        foreach (var region in wallRegions)
+        {
+            Debug.Log($"Filling internal wall region of size {region.Count} with floor tiles");
+            foreach (var pos in region)
+            {
+                newRoom[pos.x, pos.y] = (int)GridType.Floor;
+            }
+        }
+
+        return newRoom;
+    }
+
     private int[,] FillVoidsWithWalls(int[,] room)
     {
         for (int x = 0; x < room.GetLength(0); x++)
@@ -1036,4 +1250,6 @@ public class LevelGenerator_v2 : MonoBehaviour
 
         return room;
     }
+
+    #endregion
 }
