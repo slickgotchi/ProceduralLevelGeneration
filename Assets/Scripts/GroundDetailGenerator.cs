@@ -8,10 +8,12 @@ public class GroundDetailGenerator : MonoBehaviour
 {
     public static GroundDetailGenerator Instance { get; private set; }
 
+    public Tilemap ground_Tilemap;
     public Tilemap groundDetailA_Tilemap;
-    public RuleTile groundDetailA_RuleTile;
-
     public Tilemap groundDetailB_Tilemap;
+
+    public TileBase ground_Tile;
+    public RuleTile groundDetailA_RuleTile;
     public RuleTile groundDetailB_RuleTile;
 
     private void Awake()
@@ -29,17 +31,21 @@ public class GroundDetailGenerator : MonoBehaviour
 
     public void Generate()
     {
+        ground_Tilemap.ClearAllTiles();
         groundDetailA_Tilemap.ClearAllTiles();
         groundDetailB_Tilemap.ClearAllTiles();
 
         // iterate over rooms and draw in using snoise
-        var rooms = LevelGenerator.Instance.GetRooms();
+        var rooms = LevelGenerator_v2.Instance.GetRooms();
         foreach (var room in rooms)
         {
-            for (int x = room.xMin; x < room.xMax-1; x++)
+            for (int x = room.rectInt.xMin; x < room.rectInt.xMax; x++)
             {
-                for (int y = room.yMin; y < room.yMax-1; y++)
+                for (int y = room.rectInt.yMin; y < room.rectInt.yMax; y++)
                 {
+                    // set ground tile
+                    ground_Tilemap.SetTile(new Vector3Int(x, y, 0), ground_Tile);
+
                     var noiseValue = (noise.snoise(new float2(x, y)) + 1) * 0.5f;
                     if (noiseValue > 0.87f)
                     {
@@ -62,14 +68,16 @@ public class GroundDetailGenerator : MonoBehaviour
         {
             for (int j = y; j < y + height; j++)
             {
-                if (LevelGenerator.Instance.IsInRoomBounds(i, j))
+                if (LevelGenerator_v2.Instance.IsInRoomBounds(i, j))
                 {
                     if (isA)
                     {
+                        Debug.Log("Set detail A");
                         groundDetailA_Tilemap.SetTile(new Vector3Int(i, j, 0), groundDetailA_RuleTile);
                     }
                     else
                     {
+                        Debug.Log("Set detail B");
                         groundDetailB_Tilemap.SetTile(new Vector3Int(i, j, 0), groundDetailB_RuleTile);
                     }
                 }

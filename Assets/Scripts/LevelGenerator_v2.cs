@@ -17,6 +17,9 @@ public class LevelGenerator_v2 : MonoBehaviour
     public int maxLevelHeight = 17 * 6;
     public int targetNumberRooms = 7;
 
+    [Header("Player")]
+    public GameObject playerPrefab;
+
     [Header("Tilemaps to Populate")]
     public Tilemap baseWorking_Tilemap;
     public Tilemap ground_Tilemap;
@@ -39,6 +42,8 @@ public class LevelGenerator_v2 : MonoBehaviour
     // working params 
     private int m_levelWidth;
     private int m_levelHeight;
+
+    private GameObject player;
 
     // the map represents our room with int codings:
     //  0 = void
@@ -93,6 +98,9 @@ public class LevelGenerator_v2 : MonoBehaviour
     {
         Random.InitState(masterSeed);
 
+        player = Instantiate(playerPrefab);
+        Camera.main.transform.parent = player.transform;
+
         GenerateLevel();
     }
 
@@ -102,6 +110,11 @@ public class LevelGenerator_v2 : MonoBehaviour
         {
             GenerateLevel();
         }
+    }
+
+    public List<Room> GetRooms()
+    {
+        return m_rooms;
     }
 
     void GenerateLevel()
@@ -136,6 +149,15 @@ public class LevelGenerator_v2 : MonoBehaviour
 
         // render the map
         RenderMap();
+
+        // draw ground details
+        GroundDetailGenerator.Instance.Generate();
+
+        // place player in room 0
+        player.transform.position = new Vector3(
+            (m_rooms[0].rectInt.xMin + m_rooms[0].rectInt.xMax) / 2,
+            (m_rooms[0].rectInt.yMin + m_rooms[0].rectInt.yMax) / 2,
+            0);
     }
 
     public enum IterationPattern { LeftRight_UpDown, LeftRight_DownUp, RightLeft_UpDown, RightLeft_DownUp }
@@ -425,6 +447,7 @@ public class LevelGenerator_v2 : MonoBehaviour
         {
             // 1. Randomly pick room type
             int roomType = Random.Range(0, 3);
+            if (i == 0) roomType = (int)RoomType.OverlappingEllipses;
             var tempRoom = GenerateRoomMap((RoomType)roomType, roomEdgeBuffer);
 
             if (i == 0)
@@ -1252,4 +1275,17 @@ public class LevelGenerator_v2 : MonoBehaviour
     }
 
     #endregion
+
+    public bool IsInRoomBounds(int x, int y)
+    {
+        foreach (var room in m_rooms)
+        {
+            if (x >= room.rectInt.xMin && x < room.rectInt.xMax && y >= room.rectInt.yMin && y < room.rectInt.yMax)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
 }
